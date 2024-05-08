@@ -16,6 +16,7 @@ public class Ent : MonoBehaviour
     public float userSphereCircumpherence;
     public float xrotation;
     public float yrotation;
+    protected bool leftclick = false;
     protected bool moving = false;
     protected bool movingForward = false;
     protected bool movingBackward = false;
@@ -25,6 +26,11 @@ public class Ent : MonoBehaviour
     protected bool ctrlDown = false;
     public float accelerationSpeed;
     public float maxSpeed;
+    public RaycastHit raycastHit;
+    public GameObject hovering;
+    public bool canHover = true;
+    public GameObject selected;
+    private float selectedDistance;
     // Start is called before the first frame update
     void Start()
     {
@@ -64,6 +70,17 @@ public class Ent : MonoBehaviour
     }
     protected void HandleInput()
     {
+        if (Input.GetMouseButtonDown(0))
+        {
+            leftclick = true;
+        }
+        if (Input.GetMouseButtonUp(0))
+        {
+            leftclick = false;
+            if (selected != null) {
+                DeTelekenesize();
+            }
+        }
         if (Input.GetKeyDown(KeyCode.W))
         {
             movingForward = true;
@@ -120,6 +137,40 @@ public class Ent : MonoBehaviour
         }
     }
 
+    protected void Telekinesize()
+    {
+        if (hovering != null) {
+            // make selected and swap outline colors
+            selected = hovering;
+            canHover = false;
+            Color primary;
+            Color alternate;
+            Outline outline = selected.GetComponent<Outline>();
+            primary = outline.OutlineColor;
+            alternate = outline.OutlineColorVariant;
+            outline.OutlineColorVariant = primary;
+            outline.OutlineColor = alternate;
+            selectedDistance = raycastHit.distance;
+            hovering = null;
+        }
+        else if (selected == null) {
+            return;
+        }
+        RaycastHit cheese;
+        Ray ray = new Ray(transform.position, Camera.main.transform.forward);
+        selected.transform.position = ray.GetPoint(selectedDistance);
+    }
+    protected void DeTelekenesize()
+    {
+        Outline outline = selected.GetComponent<Outline>();
+        Color primary = outline.OutlineColor;
+        Color alternate = outline.OutlineColorVariant;
+        outline.OutlineColorVariant = primary;
+        outline.OutlineColor = alternate;
+        canHover = true;
+        selected = null;
+    }
+
     protected void Move() {
         if (movingForward)
         {
@@ -159,7 +210,7 @@ public class Ent : MonoBehaviour
     }
     protected void UpdateCursor(GameObject target)
     {
-        target.transform.position = transform.forward * 40f;
+        // target.transform.position = transform.forward * 40f;
         // Vector3 newPosition = target.transform.position + new Vector3(mouseInputVector.x, mouseInputVector.y, 0);
         // target.transform.RotateAround(transform.position, newPosition, 20 * Time.deltaTime);
         // if (newPosition != transform.position)
@@ -171,11 +222,40 @@ public class Ent : MonoBehaviour
         // }
     }
 
+    protected void SeeObjects()
+    {
+        Ray ray = Camera.main.ScreenPointToRay(transform.position);
+        Physics.Raycast(transform.position, Camera.main.transform.forward, out raycastHit, 100000f);
+        if (raycastHit.collider != null)
+        {
+            var mom = raycastHit.collider.gameObject;
+            if (hovering != null) {
+                if (mom != hovering)
+                {
+                    hovering.GetComponent<Outline>().enabled = false;
+                    hovering = null;
+                }
+            }
+            if (mom.layer == 3)
+            {
+                hovering = mom;
+                mom.GetComponent<Outline>().enabled = true;
+            }
+            cursor.transform.position = mom.transform.position;
+        }
+        else {
+            if (hovering != null) {
+                hovering.GetComponent<Outline>().enabled = false;
+                hovering = null;
+            }
+        }
+    }
+
     // Update is called once per frame
     void Update()
     {
         UpdateMouseInput();
-        UpdateCursor(cursor);
+        // UpdateCursor(cursor);
         RotateMouse(gameObject);
         Debug.DrawLine(transform.position, cursor.transform.position, Color.green);
         Debug.DrawLine(transform.position, transform.forward * 100000f, Color.green);
@@ -184,6 +264,12 @@ public class Ent : MonoBehaviour
         HandleInput();
         if (moving) {
             Move();
+        }
+        if (leftclick) {
+            Telekinesize();
+        }
+        if (canHover) {
+            SeeObjects();
         }
     }
 }

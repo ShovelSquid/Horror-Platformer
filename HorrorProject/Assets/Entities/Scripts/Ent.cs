@@ -11,24 +11,35 @@ public class Ent : MonoBehaviour
     public CapsuleCollider pC;
     public Rigidbody rb;
     public float speed = 10f;
+    public float flightDrag = 2f;
+    public float downForceBase;
+    public float downForce;
+    public bool downForceOn = true;
     public float mouseSensitivity = 1000;
     public float cursorDistance;
     public float userSphereCircumpherence;
     public float xrotation;
     public float yrotation;
     protected bool leftclick = false;
+    protected bool rightclick = false;
     protected bool moving = false;
+    protected bool flying = false;
+    protected bool running = false;
+    public bool telekenetics = false;
     protected bool movingForward = false;
     protected bool movingBackward = false;
     protected bool movingLeftward = false;
     protected bool movingRightward = false;
     protected bool spaceDown = false;
     protected bool ctrlDown = false;
-    public float accelerationSpeed;
+    public float airAccelerationSpeed;
+    public float groundAccelerationSpeed;
+    public float jumpForce;
     public float maxSpeed;
     public RaycastHit raycastHit;
     public GameObject hovering;
-    public bool canHover = true;
+    public bool canHover = false;
+    public bool canJump = false;
     public GameObject selected;
     private float selectedDistance;
     // Start is called before the first frame update
@@ -77,9 +88,16 @@ public class Ent : MonoBehaviour
         if (Input.GetMouseButtonUp(0))
         {
             leftclick = false;
-            if (selected != null) {
-                DeTelekenesize();
-            }
+            OnLeftClickUp();
+        }
+        if (Input.GetMouseButtonDown(1))
+        {
+            rightclick = true;
+        }
+        if (Input.GetMouseButtonUp(1))
+        {
+            rightclick = false;
+            OnRightClickUp();
         }
         if (Input.GetKeyDown(KeyCode.W))
         {
@@ -137,11 +155,50 @@ public class Ent : MonoBehaviour
         }
     }
 
+    private void OnLeftClickUp()
+    {
+        if (telekenetics) {
+            DeTelekenesize();
+        }
+    }
+    private void OnRightClickUp()
+    {
+        Debug.Log("yeah cool man alert");
+        if (telekenetics) {
+            Telekenetics(false);
+            StartFlying(false);
+        }
+        else {
+            Telekenetics(true);
+            StartFlying(true);
+        }
+    }
+
+    protected void Telekenetics(bool on)
+    {
+        if (on) {
+            canHover = true;
+            telekenetics = true;
+        }
+        if (!on) {
+            StopHovering();
+            DeTelekenesize();
+            canHover = false;
+            telekenetics = false;
+        }
+        
+    }
+
     protected void Telekinesize()
     {
         if (hovering != null) {
             // make selected and swap outline colors
             selected = hovering;
+            Rigidbody r = selected.GetComponent<Rigidbody>();
+            if (r != null)
+            {
+                r.isKinematic = true;
+            }
             canHover = false;
             Color primary;
             Color alternate;
@@ -150,51 +207,97 @@ public class Ent : MonoBehaviour
             alternate = outline.OutlineColorVariant;
             outline.OutlineColorVariant = primary;
             outline.OutlineColor = alternate;
-            selectedDistance = raycastHit.distance;
+            selectedDistance = raycastHit.distance*1.5f;
             hovering = null;
         }
         else if (selected == null) {
             return;
         }
+        Debug.Log("Selected Distance: " + selectedDistance);
+        selectedDistance += Input.mouseScrollDelta.y * selectedDistance/5f;
         RaycastHit cheese;
         Ray ray = new Ray(transform.position, Camera.main.transform.forward);
         selected.transform.position = ray.GetPoint(selectedDistance);
     }
     protected void DeTelekenesize()
     {
-        Outline outline = selected.GetComponent<Outline>();
-        Color primary = outline.OutlineColor;
-        Color alternate = outline.OutlineColorVariant;
-        outline.OutlineColorVariant = primary;
-        outline.OutlineColor = alternate;
-        canHover = true;
-        selected = null;
+        if (selected != null) {
+            StopHovering();
+            Outline outline = selected.GetComponent<Outline>();
+            Color primary = outline.OutlineColor;
+            Color alternate = outline.OutlineColorVariant;
+            outline.OutlineColorVariant = primary;
+            outline.OutlineColor = alternate;
+            canHover = true;
+            Rigidbody r = selected.GetComponent<Rigidbody>();
+            if (r != null)
+            {
+                r.isKinematic = false;
+            }
+            selected = null;
+        }
     }
 
-    protected void Move() {
+    protected void Run()
+    {
         if (movingForward)
         {
-            rb.AddForce(accelerationSpeed * transform.forward, ForceMode.Acceleration);
+            rb.AddForce(groundAccelerationSpeed * transform.forward, ForceMode.Acceleration);
         }
         if (movingBackward)
         {
-            rb.AddForce(accelerationSpeed * -transform.forward, ForceMode.Acceleration);
+            rb.AddForce(groundAccelerationSpeed * -transform.forward, ForceMode.Acceleration);
         }
         if (movingLeftward)
         {
-            rb.AddForce(accelerationSpeed * -transform.right, ForceMode.Acceleration);
+            rb.AddForce(groundAccelerationSpeed * -transform.right, ForceMode.Acceleration);
         }
         if (movingRightward)
         {
-            rb.AddForce(accelerationSpeed * transform.right, ForceMode.Acceleration);
+            rb.AddForce(groundAccelerationSpeed * transform.right, ForceMode.Acceleration);
         }
         if (spaceDown)
         {
-            rb.AddForce(accelerationSpeed * transform.up, ForceMode.Acceleration);
+            TryJump();
+        }
+    }
+    protected void TryJump()
+    {
+        if (canJump) {
+            Jump();
+        }
+    }
+    protected void Jump()
+    {
+        rb.AddForce(jumpForce * transform.up, ForceMode.Impulse);
+        downForce = downForce/3;
+    }
+
+    protected void Fly() 
+    {
+        if (movingForward)
+        {
+            rb.AddForce(airAccelerationSpeed * transform.forward, ForceMode.Acceleration);
+        }
+        if (movingBackward)
+        {
+            rb.AddForce(airAccelerationSpeed * -transform.forward, ForceMode.Acceleration);
+        }
+        if (movingLeftward)
+        {
+            rb.AddForce(airAccelerationSpeed * -transform.right, ForceMode.Acceleration);
+        }
+        if (movingRightward)
+        {
+            rb.AddForce(airAccelerationSpeed * transform.right, ForceMode.Acceleration);
+        }
+        if (spaceDown)
+        {
+            rb.AddForce(airAccelerationSpeed * transform.up, ForceMode.Acceleration);
         }
         if (ctrlDown)
         {
-            rb.AddForce(accelerationSpeed * -transform.up, ForceMode.Acceleration);
+            rb.AddForce(airAccelerationSpeed * -transform.up, ForceMode.Acceleration);
         }
         if (!movingForward && !movingBackward && !movingLeftward && !movingRightward && !spaceDown && !ctrlDown)
         {
@@ -207,7 +310,32 @@ public class Ent : MonoBehaviour
                 moving = true;
             }
         }
+        if (ctrlDown && spaceDown)
+        {
+            StartFlying(false);
+        }
     }
+    protected void StartFlying(bool on) 
+    {
+        if (!on)
+        {
+            flying = false;
+            // rb.useGravity = true;
+            rb.drag = 0;
+            downForceOn = true;
+            canJump = true;
+            running = true;
+        }
+        else {
+            flying = true;
+            // rb.useGravity = false;
+            rb.drag = flightDrag;
+            downForceOn = false;
+            canJump = false;
+            running = false;
+        }
+    }
+
     protected void UpdateCursor(GameObject target)
     {
         // target.transform.position = transform.forward * 40f;
@@ -229,12 +357,9 @@ public class Ent : MonoBehaviour
         if (raycastHit.collider != null)
         {
             var mom = raycastHit.collider.gameObject;
-            if (hovering != null) {
-                if (mom != hovering)
-                {
-                    hovering.GetComponent<Outline>().enabled = false;
-                    hovering = null;
-                }
+            if (mom != hovering)
+            {
+                StopHovering();
             }
             if (mom.layer == 3)
             {
@@ -244,10 +369,14 @@ public class Ent : MonoBehaviour
             cursor.transform.position = mom.transform.position;
         }
         else {
-            if (hovering != null) {
-                hovering.GetComponent<Outline>().enabled = false;
-                hovering = null;
-            }
+            StopHovering();
+        }
+    }
+    void StopHovering()
+    {
+        if (hovering != null) {
+            hovering.GetComponent<Outline>().enabled = false;
+            hovering = null;
         }
     }
 
@@ -262,14 +391,27 @@ public class Ent : MonoBehaviour
         Debug.DrawLine(head.transform.position, head.transform.forward * 100000f, Color.blue);
         // RotateTo(cursor);
         HandleInput();
-        if (moving) {
-            Move();
+        if (moving && flying) {
+            Fly();
         }
-        if (leftclick) {
+        if (moving && running) {
+            Run();
+        }
+        if (leftclick && telekenetics) {
             Telekinesize();
         }
         if (canHover) {
             SeeObjects();
+        }
+        if (downForceOn) {
+            rb.velocity += new Vector3(0, -downForce, 0) * Time.deltaTime;
+            if (downForce != downForceBase) {
+                // Debug.Log("cheeeeese");
+                downForce = Mathf.Lerp(downForce, downForceBase, 0.005f);
+                if (downForceBase - downForce < 1) {
+                    downForce = downForceBase;
+                }
+            }
         }
     }
 }
